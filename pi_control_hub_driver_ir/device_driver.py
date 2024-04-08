@@ -69,8 +69,8 @@ class LircDeviceDriver(DeviceDriver):
             keys = self._lirc_client.list_remote_keys(self.device_id)
             keys = sorted(keys)
             commands = []
-            for i in range(len(keys)):
-                commands.append(LircDeviceCommand(i, keys[i], keys[i], self.device_id))
+            for i, key in enumerate(keys):
+                commands.append(LircDeviceCommand(i, key, key, self.device_id))
             return commands
         return []
 
