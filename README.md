@@ -18,7 +18,7 @@ PiControl Hub driver to control devices using IR.
 | ---------- | --------------------- |
 | Signal     | 18 (GPIO24)           |
 | GND        | 6                     |
-| VCC        | 17 (3,3V)             |
+| VCC        | 2 (5V)                |
 
 ### PiIR
 

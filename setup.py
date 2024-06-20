@@ -32,7 +32,7 @@ setup(
     },
     install_requires=[
         'pi_control_hub_driver_api @ git+https://github.com/PiControl/pi_control_hub_driver_api.git@main#egg=pi_control_hub_driver_api',
-        'lirc>=2.0.2'
+        'PiIR>=0.2.5'
     ],
     entry_points={
         "pi_control_hub_driver": [

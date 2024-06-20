@@ -14,13 +14,16 @@
    limitations under the License.
 """
 
+import json
+import os
 from typing import List, Tuple
 from uuid import UUID, uuid4
 
-import lirc
+import piir
 from pi_control_hub_driver_api import (AuthenticationMethod, DeviceCommand,
                                        DeviceDriver, DeviceDriverDescriptor,
-                                       DeviceInfo, DeviceNotFoundException)
+                                       DeviceInfo, DeviceNotFoundException,
+                                       DeviceDriverException)
 
 from pi_control_hub_driver_ir.icons import read_icon_for_key
 
@@ -50,9 +53,16 @@ class LircDeviceDriver(DeviceDriver):
     def __init__(self, device_info: DeviceInfo):
         DeviceDriver.__init__(self, device_info)
         try:
-            self._lirc_client = lirc.Client()
-        except lirc.exceptions.LircdConnectionError:
-            self._lirc_client = None
+            remote_defition_path = os.path.join(
+                DeviceDriverDescriptor.get_config_path(),
+                "pi_control_hub_driver_ir"
+            )
+            filepath = os.path.join(remote_defition_path, device_info.device_id)
+            with open(filepath, encoding="utf-8") as f:
+                content: str = f.read()
+                self._remote_definition = json.loads(content)
+        except Exception as ex:
+            raise DeviceDriverException("Error while reading the remote definition", ex) from ex
 
     async def get_commands(self) -> List[DeviceCommand]:
         """Return the commands that are supported by this device.
@@ -65,14 +75,11 @@ class LircDeviceDriver(DeviceDriver):
         ------
         `DeviceDriverException` in case of an error.
         """
-        if self._lirc_client is not None:
-            keys = self._lirc_client.list_remote_keys(self.device_id)
-            keys = sorted(keys)
-            commands = []
-            for i, key in enumerate(keys):
-                commands.append(LircDeviceCommand(i, key, key, self.device_id))
-            return commands
-        return []
+        keys = self._remote_definition["keys"]
+        commands = []
+        for i, key in enumerate(sorted(list(keys.keys()))):
+            commands.append(LircDeviceCommand(i, key, key, self.device_id))
+        return commands
 
     @property
     def remote_layout_size(self) -> Tuple[int, int]:
@@ -83,7 +90,8 @@ class LircDeviceDriver(DeviceDriver):
         -------
         A tuple with the width and height of the layout
         """
-        return 0,0
+        remote = self._remote_definition["remote"]
+        return remote["width"], remote["height"]
 
     @property
     def remote_layout(self) -> List[List[int]]:
@@ -94,6 +102,8 @@ class LircDeviceDriver(DeviceDriver):
         -------
         The layout as a list of columns.
         """
+        remote = self._remote_definition["remote"]
+        layout = remote["layout"]
         return []
 
     async def execute(self, command: DeviceCommand):
@@ -131,19 +141,21 @@ class LircDeviceDriverDescriptor(DeviceDriverDescriptor):
             "IR Controlled Devices",                          # display name
             "PiControl Hub driver for controling IR devices", # description
         )
-        try:
-            self._lirc_client = lirc.Client()
-        except lirc.exceptions.LircdConnectionError:
-            self._lirc_client = None
+        self._remote_defition_path = os.path.join(
+            DeviceDriverDescriptor.get_config_path(),
+            "pi_control_hub_driver_ir"
+        )
+        if not os.path.isdir(self._remote_defition_path):
+            self._remote_defition_path = None
 
     async def get_devices(self) -> List[DeviceInfo]:
         """Returns a list with the available device instances."""
-        if self._lirc_client is not None:
-            devices = list(
-                map(
-                    lambda r: DeviceInfo(r, r),
-                    self._lirc_client.list_remotes()))
-            return devices
+        if self._remote_defition_path is not None:
+            remotes = [f for f in os.listdir(self._remote_defition_path)
+                       if os.path.isfile(os.path.join(self._remote_defition_path, f)) and
+                       (len(os.path.splitext(f)) > 1) and
+                       os.path.splitext(f)[1] == ".remote"]
+            return list(map(lambda f: DeviceInfo(os.path.splitext(f)[0], f), remotes))
         return []
 
     async def get_device(self, device_id: str) -> DeviceInfo:
